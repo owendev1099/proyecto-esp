@@ -93,5 +93,5 @@ app.get('/api/telemetry/count', async (req, res) => {
 
 // ----------- Iniciar servidor -----------
 app.listen(PORT, () => {
-  console.log(Servidor corriendo en puerto ${PORT});
+  console.log(`Servidor corriendo en puerto ${PORT}`);
 });
