@@ -1,17 +1,15 @@
-require('dotenv').config(); // Cargar variables de entorno
+require('dotenv').config();
 
-const express = require('express');
+const express   = require('express');
 const bodyParser = require('body-parser');
-const mongoose = require('mongoose');
+const mongoose  = require('mongoose');
 const Telemetry = require('./models/Telemetry');
-const morgan = require('morgan');
+const morgan    = require('morgan');
 
 const MONGO_URI = process.env.MONGO_URI;
-const PORT = process.env.PORT || 3000;
+const PORT      = process.env.PORT || 3000;
 
-// ============================
-// 🔌 Conexión a MongoDB Atlas
-// ============================
+// Conexión a MongoDB
 mongoose.connect(MONGO_URI)
   .then(() => console.log('MongoDB conectado'))
   .catch(err => {
@@ -23,41 +21,33 @@ const app = express();
 app.use(morgan('dev'));
 app.use(bodyParser.json({ limit: '1mb' }));
 
-// ============================
-// 📡 POST /api/telemetry
-// ============================
+// ----------- POST /api/telemetry -----------
 app.post('/api/telemetry', async (req, res) => {
   try {
     const body = req.body;
     console.log('Payload recibido desde ESP32:', body);
 
-    // Lo que manda el ESP:
-    // { temp: 25, hum: 43, timestamp: "2025-11-19 23:58:27" }
-    //
-    // Lo que espera el modelo actual:
-    // device_id (String, requerido)
-    // timestamp (Date, requerido)
-    // temperature (Number)
-    // humidity (Number)
-    // touch, wifi_rssi, free_heap (opcionales)
+    // Campos del ESP
+    const deviceId = body.device_id || body.deviceId || 'esp32-dht11-1';
 
-    const temperature = body.temperature ?? body.temp;
-    const humidity   = body.humidity   ?? body.hum;
-
-    // Validaciones mínimas
-    if (temperature === undefined || humidity === undefined) {
-      return res.status(400).json({ error: 'temp/temperature y hum/humidity son requeridos' });
+    // ts_esp viene en UTC como string ISO
+    if (!body.ts_esp) {
+      return res.status(400).json({ error: 'ts_esp es requerido' });
     }
+    const tsEsp = new Date(body.ts_esp);   // se guarda en UTC en Mongo
 
-    // device_id por defecto si no viene
-    const deviceId = body.device_id || body.deviceId || 'esp32-local';
+    // Temperatura / humedad
+    const temperature = body.temperature ?? body.temp;
+    const humidity    = body.humidity   ?? body.hum;
 
-    // timestamp: si viene en el body lo convertimos a Date, si no usamos ahora
-    const ts = body.timestamp ? new Date(body.timestamp) : new Date();
+    if (temperature === undefined || humidity === undefined) {
+      return res.status(400).json({ error: 'temperature/humidity (o temp/hum) son requeridos' });
+    }
 
     const doc = new Telemetry({
       device_id: deviceId,
-      timestamp: ts,
+      ts_esp: tsEsp,
+      ts_server: new Date(),   // hora del servidor
       temperature,
       humidity,
       touch: body.touch || {},
@@ -74,14 +64,12 @@ app.post('/api/telemetry', async (req, res) => {
   }
 });
 
-// ============================
-// 📄 GET /api/telemetry/latest
-// ============================
+// ----------- GET /api/telemetry/latest -----------
 app.get('/api/telemetry/latest', async (req, res) => {
   try {
     const limit = Math.min(parseInt(req.query.limit || '50'), 1000);
     const docs = await Telemetry.find()
-      .sort({ timestamp: -1 })
+      .sort({ ts_server: -1 })
       .limit(limit)
       .exec();
 
@@ -92,9 +80,7 @@ app.get('/api/telemetry/latest', async (req, res) => {
   }
 });
 
-// ============================
-// 🔢 GET /api/telemetry/count
-// ============================
+// ----------- GET /api/telemetry/count -----------
 app.get('/api/telemetry/count', async (req, res) => {
   try {
     const count = await Telemetry.countDocuments();
@@ -105,9 +91,7 @@ app.get('/api/telemetry/count', async (req, res) => {
   }
 });
 
-// ============================
-// 🚀 Iniciar servidor
-// ============================
+// ----------- Iniciar servidor -----------
 app.listen(PORT, () => {
-  console.log(`Servidor corriendo en puerto ${PORT}`);
+  console.log(Servidor corriendo en puerto ${PORT});
 });
