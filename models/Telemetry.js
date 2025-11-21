@@ -1,19 +1,16 @@
 const mongoose = require('mongoose');
 
 const telemetrySchema = new mongoose.Schema({
-  // Ahora es OPCIONAL, porque tu ESP no lo está enviando
-  device_id: { type: String, required: false },
+  device_id: { type: String, required: true },
 
-  // El ESP sí envía timestamp, lo seguimos dejando requerido
-  timestamp: { type: Date, required: true },
+  // Timestamp del ESP32 (UTC, viene en el JSON)
+  ts_esp: { type: Date, required: true },
 
-  // Aceptamos lo que manda el ESP: temp y hum
-  temp: Number,
-  hum: Number,
+  // Timestamp del servidor (cuando llega la petición)
+  ts_server: { type: Date, required: true, default: Date.now },
 
-  // Si más adelante quieres usar nombres "bonitos":
-  // temperature: Number,
-  // humidity: Number,
+  temperature: Number,
+  humidity: Number,
 
   touch: {
     t0: Number,
