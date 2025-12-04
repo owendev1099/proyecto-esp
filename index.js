@@ -28,8 +28,13 @@ app.use(bodyParser.json({ limit: '1mb' }));
 // 📝 POST /api/log
 // ============================
 app.post('/api/log', (req, res) => {
-  console.log("📩 LOG desde ESP32:", req.body);
-  res.json({ ok: true });
+  if (!req.body || typeof req.body.interval_received === "undefined") {
+    console.log("📩 LOG desde ESP32: (vacío o inválido)", req.body);
+  } else {
+    console.log("📩 LOG desde ESP32:", req.body);
+  }
+
+  return res.json({ ok: true });
 });
 
 // ============================
@@ -38,30 +43,29 @@ app.post('/api/log', (req, res) => {
 app.post('/api/telemetry', async (req, res) => {
   try {
     const body = req.body;
+
     console.log('Payload recibido desde ESP32:', body);
 
-    const deviceId = body.device_id || "esp32";
-
-    if (!body.ts_esp)
+    if (!body || !body.ts_esp) {
       return res.status(400).json({ error: 'ts_esp requerido' });
+    }
 
-    const temperature = body.temperature;
-    const humidity = body.humidity;
+    const deviceId = body.device_id || "esp32";
 
     const doc = new Telemetry({
       device_id: deviceId,
       ts_esp: new Date(body.ts_esp),
       ts_server: new Date(),
-      temperature,
-      humidity
+      temperature: body.temperature,
+      humidity: body.humidity
     });
 
     await doc.save();
-    res.status(201).json({ ok: true, id: doc._id });
+    return res.status(201).json({ ok: true, id: doc._id });
 
   } catch (err) {
     console.error('POST /api/telemetry error:', err);
-    res.status(500).json({ error: 'internal' });
+    return res.status(500).json({ error: 'internal' });
   }
 });
 
@@ -69,9 +73,14 @@ app.post('/api/telemetry', async (req, res) => {
 // ⏱️ GET /api/update
 // ============================
 app.get('/api/update', (req, res) => {
-  const randomSeconds = Math.floor(Math.random() * (60 - 4 + 1)) + 4;
+  const randomSeconds = Math.floor(Math.random() * 57) + 4; // 4–60
+
   console.log("Nuevo intervalo enviado al ESP32:", randomSeconds);
-  res.json({ interval: randomSeconds });
+
+  return res
+    .status(200)
+    .set("Content-Type", "application/json")
+    .json({ interval: randomSeconds });
 });
 
 // ============================
@@ -79,11 +88,16 @@ app.get('/api/update', (req, res) => {
 // ============================
 app.get('/api/telemetry/latest', async (req, res) => {
   try {
-    const docs = await Telemetry.find().sort({ ts_server: -1 }).limit(50).exec();
-    res.json(docs);
+    const docs = await Telemetry.find()
+      .sort({ ts_server: -1 })
+      .limit(50)
+      .exec();
+
+    return res.json(docs);
+
   } catch (err) {
     console.error('GET /api/telemetry/latest error:', err);
-    res.status(500).json({ error: 'internal' });
+    return res.status(500).json({ error: 'internal' });
   }
 });
 
@@ -93,14 +107,17 @@ app.get('/api/telemetry/latest', async (req, res) => {
 app.get('/api/telemetry/count', async (req, res) => {
   try {
     const count = await Telemetry.countDocuments();
-    res.json({ count });
+    return res.json({ count });
+
   } catch (err) {
     console.error('GET /api/telemetry/count error:', err);
-    res.status(500).json({ error: 'internal' });
+    return res.status(500).json({ error: 'internal' });
   }
 });
 
-// Start server
+// ============================
+// 🚀 Start server
+// ============================
 app.listen(PORT, () => {
   console.log(`Servidor corriendo en puerto ${PORT}`);
 });
