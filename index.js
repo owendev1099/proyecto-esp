@@ -1,18 +1,21 @@
-require('dotenv').config();
+require('dotenv').config(); // Cargar variables de entorno
 
-const express   = require('express');
+const express = require('express');
 const bodyParser = require('body-parser');
-const mongoose  = require('mongoose');
+const mongoose = require('mongoose');
 const Telemetry = require('./models/Telemetry');
-const morgan    = require('morgan');
+const morgan = require('morgan');
 
 const MONGO_URI = process.env.MONGO_URI;
 const PORT      = process.env.PORT || 3000;
 
-// Conexión a MongoDB
-mongoose.connect(MONGO_URI)
+// ============================
+// 🔌 Conexión a MongoDB Atlas
+// ============================
+mongoose
+  .connect(MONGO_URI)
   .then(() => console.log('MongoDB conectado'))
-  .catch(err => {
+  .catch((err) => {
     console.error('Error MongoDB:', err);
     process.exit(1);
   });
@@ -21,33 +24,40 @@ const app = express();
 app.use(morgan('dev'));
 app.use(bodyParser.json({ limit: '1mb' }));
 
-// ----------- POST /api/telemetry -----------
+// ============================
+// 📡 POST /api/telemetry
+// ============================
 app.post('/api/telemetry', async (req, res) => {
   try {
     const body = req.body;
     console.log('Payload recibido desde ESP32:', body);
 
     // Campos del ESP
-    const deviceId = body.device_id || body.deviceId || 'esp32-dht11-1';
+    const deviceId = body.device_id || body.deviceId || 'esp32-local';
 
     // ts_esp viene en UTC como string ISO
     if (!body.ts_esp) {
       return res.status(400).json({ error: 'ts_esp es requerido' });
     }
-    const tsEsp = new Date(body.ts_esp);   // se guarda en UTC en Mongo
+    const tsEsp = new Date(body.ts_esp);
 
-    // Temperatura / humedad
+    // Temperatura y humedad
     const temperature = body.temperature ?? body.temp;
-    const humidity    = body.humidity   ?? body.hum;
+    const humidity    = body.humidity    ?? body.hum;
 
     if (temperature === undefined || humidity === undefined) {
-      return res.status(400).json({ error: 'temperature/humidity (o temp/hum) son requeridos' });
+      return res
+        .status(400)
+        .json({ error: 'temp/temperature y hum/humidity son requeridos' });
     }
+
+    // timestamp opcional
+    const ts = body.timestamp ? new Date(body.timestamp) : new Date();
 
     const doc = new Telemetry({
       device_id: deviceId,
       ts_esp: tsEsp,
-      ts_server: new Date(),   // hora del servidor
+      ts_server: new Date(),
       temperature,
       humidity,
       touch: body.touch || {},
@@ -57,14 +67,26 @@ app.post('/api/telemetry', async (req, res) => {
 
     await doc.save();
     return res.status(201).json({ ok: true, id: doc._id });
-
   } catch (err) {
     console.error('POST /api/telemetry error:', err);
     return res.status(500).json({ error: 'internal' });
   }
 });
 
-// ----------- GET /api/telemetry/latest -----------
+// ============================
+// ⏱️ GET /api/update
+// ============================
+app.get('/api/update', (req, res) => {
+  const randomSeconds = Math.floor(Math.random() * (60 - 4 + 1)) + 4;
+
+  console.log('Nuevo intervalo enviado al ESP32:', randomSeconds);
+
+  res.json({ interval: randomSeconds });
+});
+
+// ============================
+// 📄 GET /api/telemetry/latest
+// ============================
 app.get('/api/telemetry/latest', async (req, res) => {
   try {
     const limit = Math.min(parseInt(req.query.limit || '50'), 1000);
@@ -80,7 +102,9 @@ app.get('/api/telemetry/latest', async (req, res) => {
   }
 });
 
-// ----------- GET /api/telemetry/count -----------
+// ============================
+// 🔢 GET /api/telemetry/count
+// ============================
 app.get('/api/telemetry/count', async (req, res) => {
   try {
     const count = await Telemetry.countDocuments();
@@ -93,5 +117,5 @@ app.get('/api/telemetry/count', async (req, res) => {
 
 // ----------- Iniciar servidor -----------
 app.listen(PORT, () => {
-  console.log(Servidor corriendo en puerto ${PORT});
+  console.log(`Servidor corriendo en puerto ${PORT}`);
 });
