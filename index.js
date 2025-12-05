@@ -46,21 +46,27 @@ app.post('/api/telemetry', async (req, res) => {
 
     console.log('Payload recibido desde ESP32:', body);
 
+    // ✔ Si no trae ts_esp, usar la hora del servidor
+    let tsEsp;
     if (!body || !body.ts_esp) {
-      return res.status(400).json({ error: 'ts_esp requerido' });
+      console.log("⚠️ ts_esp NO recibido, usando hora del servidor.");
+      tsEsp = new Date(); 
+    } else {
+      tsEsp = new Date(body.ts_esp);
     }
 
     const deviceId = body.device_id || "esp32";
 
     const doc = new Telemetry({
       device_id: deviceId,
-      ts_esp: new Date(body.ts_esp),
+      ts_esp: tsEsp,
       ts_server: new Date(),
       temperature: body.temperature,
       humidity: body.humidity
     });
 
     await doc.save();
+
     return res.status(201).json({ ok: true, id: doc._id });
 
   } catch (err) {
